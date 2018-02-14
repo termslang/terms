@@ -1,0 +1,15 @@
+HASKELL PROJECT SETUP:
+
+stack test --fast --haddock-deps
+stack haddock --open
+stack build hoogle
+stack hoogle -- generate --local
+stack hoogle -- server --local --port=8080
+
+
+stack build hdevtools
+stack exec -- which hdevtools
+  (+ add hdevtools to PATH)
+apm install linter
+apm install language-haskell
+apm install linter-hdevtools

@@ -1,10 +1,10 @@
 name:                termslang
 version:             0.1.0.0
-github:              "githubuser/termslang"
-license:             BSD3
-author:              "Author name here"
-maintainer:          "example@example.com"
-copyright:           "2018 Author name here"
+github:              "termslang/terms-haskell"
+license:             GPLv2
+author:              "Michael Baynov"
+maintainer:          "m.baynov@gmail.com"
+copyright:           "2018 Michael Baynov"
 
 extra-source-files:
 - README.md
@@ -17,11 +17,13 @@ extra-source-files:
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on Github at <https://github.com/githubuser/termslang#readme>
+description:         Please see the README on Github at <https://github.com/termslang/terms-haskell#readme>
 
 dependencies:
 - base >= 4.7 && < 5
-- hexstring >= 0.11 && < 0.12
+- text
+- text-conversions
+- cryptonite >= 0.24 && < 1
 
 library:
   source-dirs: src
@@ -34,6 +36,11 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -Wall
+    - -Wcompat
+    - -Wincomplete-record-updates
+    - -Wincomplete-uni-patterns
+    - -Wredundant-constraints
     dependencies:
     - termslang
 

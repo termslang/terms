@@ -1,22 +1,33 @@
 module Emasm
   ( parseAsmFileContents
   , unfoldPseudoasm
-  , compileToBytecode
+  , splitInitSection
+  , computeBytecode
   , extractMethods
+  , uniteBytecode
+  , addLoader
   ) where
 
 
-import Control.Monad
 import Data.List
 import Data.Char
-import Numeric
--- import Data.HexString
+import Numeric (showIntAtBase)
+import Data.Text.Encoding   (encodeUtf8)
+import Data.Text.Conversions
+import Crypto.Hash          (hash, Keccak_256, Digest)
 
 
-hexFromInstr :: (String, String) -> String
+showHex' :: (Integral a, Show a) => a -> String
+showHex' x = if (length s) `mod` 2 == 1 then '0':s else s
+  where s = (showIntAtBase 16 intToDigit) x ""
+
+keccakHash :: String -> String
+keccakHash x = show (hash (encodeUtf8 (convertText (x))) :: Digest Keccak_256)
+
+hexFromInstr :: (String,String) -> String
 hexFromInstr instr =
   case instr of
-    ("PUSH", y) -> showIntAtBase 16 intToDigit (0x5f + countPush y) "" ++ drop 2 y
+    ("PUSH", y) -> showHex' (0x5f + countPush y) ++ drop 2 y
 
     ("STOP"      ,_) -> "00"
     ("ADD"       ,_) -> "01"
@@ -136,11 +147,11 @@ hexFromInstr instr =
     ("SELFDESTRUCT"  ,_) -> "ff"
     ("SUICIDE"       ,_) -> "ff"
 
-    (x,y) -> "UNKNOWN OPCODE  ( " ++ x ++ " " ++ y ++ " )"
+    (_,_) -> ""
 
 
 
-parseAsmFileContents :: String -> [(String, String)]
+parseAsmFileContents :: String -> [(String,String)]
 parseAsmFileContents contents = map (\(x,y) -> (x, dropWhile isSpace y)) $
   map (break isSpace) $ filter (not . null) $ map (dropWhileEnd isSpace) $
   map (dropWhile isSpace) $ map (takeWhile (/=';')) (lines contents)
@@ -148,13 +159,16 @@ parseAsmFileContents contents = map (\(x,y) -> (x, dropWhile isSpace y)) $
 
 
 
--- unfoldPush :: (String, String) -> (String, String)
+-- unfoldPush :: (String,String) -> (String,String)
 -- unfoldPush (x,y)
 --   | (x == "PUSH") = ("PUSH" ++ (show n), y)
 --   | otherwise     = (x,y)
 --   where
 --     n = (length y) `div` 2 - 1
 
+
+splitInitSection :: [(String,String)] -> ([(String,String)], [(String,String)])
+splitInitSection arr = (\(x,y) -> (x, drop 1 y)) $ break (==("INIT","")) arr
 
 
 isMethodSignature :: String -> Bool
@@ -164,17 +178,23 @@ isMethodSignature x
 
 
 --TODO: index methods in list
-extractMethods :: [(String, String)] -> [String]
-extractMethods assembly = filter (not . null) $ map (\(x,y) -> if ((x == "JUMPDEST" || x == "FALLBACK") && isMethodSignature y) then y else "") assembly
+extractMethods :: [(String,String)] -> [String]
+extractMethods assembly = [ y | (x,y) <- assembly, ((x == "JUMPDEST" || x == "FALLBACK") && isMethodSignature y) ]
 
--- unfoldFallback :: (String, String) -> (String, String)
+
+
+
+-- unfoldFallback :: (String,String) -> (String,String)
 -- unfoldFallback (x,y)
 
 
 
 
-unfoldPseudoasm :: [(String, String)] -> [(String, String)]
-unfoldPseudoasm pseudoasm = pseudoasm -- map (\(x,y) -> (x,y ++ show (isMethodSignature y))) pseudoasm
+unfoldPseudoasm :: [(String,String)] -> [(String,String)]
+-- unfoldPseudoasm :: [(String,String)] -> [(String,String)]
+unfoldPseudoasm pseudoasm = pseudoasm
+-- unfoldPseudoasm pseudoasm = map (\(x,y) -> (x,keccakHash y)) pseudoasm
+-- unfoldPseudoasm pseudoasm = map (\(x,y) -> (x,y ++ show (isMethodSignature y))) pseudoasm
 -- unfoldPseudoasm pseudoasm = map unfoldPush pseudoasm
 
 
@@ -185,5 +205,25 @@ countPush :: String -> Int
 countPush y = (length y) `div` 2 - 1
 
 
-compileToBytecode :: [(String, String)] -> [String]
-compileToBytecode assembly = map hexFromInstr assembly
+computeBytecode :: [(String,String)] -> [(String,String,String)]
+computeBytecode assembly = map (\(x,y) -> (x,y,hexFromInstr (x,y))) assembly
+
+
+uniteBytecode :: [(String,String,String)] -> String
+uniteBytecode assembly = foldl (++) "" [ z | (_,_,z) <- assembly , True ]
+
+
+
+
+
+addLoader :: String -> String
+addLoader bytecode = let
+  initial = "hdfhsbhb"
+  codesize = length bytecode `div` 2
+  codepush = if codesize > 0xff then "61" else "60"
+  a = initial ++ codepush ++ showHex' codesize ++ "80"
+  codeoffset1 = length a `div` 2 + 8
+  initpush = if codeoffset > 0xff then "61" else "60"
+  codeoffset = if codeoffset1 > 0xff then codeoffset1 + 1 else codeoffset1
+  b = a ++ initpush ++ showHex' codeoffset ++ "6000396000f3" ++ bytecode
+  in b
