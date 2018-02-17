@@ -15,6 +15,7 @@ import Numeric (showIntAtBase)
 import Data.Text.Encoding   (encodeUtf8)
 import Data.Text.Conversions
 import Crypto.Hash          (hash, Keccak_256, Digest)
+import Text.Printf
 
 
 showHex' :: (Integral a, Show a) => a -> String
@@ -151,10 +152,25 @@ hexFromInstr instr =
 
 
 
+data ASMLine = ASMLine
+  { instr    :: String
+  , operand  :: String
+  , bytecode :: String
+  } deriving (Show, Eq)
+printASMLine :: ASMLine -> String
+printASMLine r =
+  printf
+    "%s %s, bytecode: %s"
+    (instr r)
+    (operand r)
+    (bytecode r)
+
+
+
 parseAsmFileContents :: String -> [(String,String)]
-parseAsmFileContents contents = map (\(x,y) -> (x, dropWhile isSpace y)) $
-  map (break isSpace) $ filter (not . null) $ map (dropWhileEnd isSpace) $
-  map (dropWhile isSpace) $ map (takeWhile (/=';')) (lines contents)
+parseAsmFileContents  = map (\(x,y) -> (x, dropWhile isSpace y)) .
+  map (break isSpace) . filter (not . null) . map (dropWhileEnd isSpace) .
+  map (dropWhile isSpace) . map (takeWhile (/=';')) . lines
 
 
 
@@ -179,8 +195,10 @@ isMethodSignature x
 
 --TODO: index methods in list
 extractMethods :: [(String,String)] -> [String]
-extractMethods assembly = [ y | (x,y) <- assembly, ((x == "JUMPDEST" || x == "FALLBACK") && isMethodSignature y) ]
+extractMethods asm = [ y | (x,y) <- asm, ((x == "JUMPDEST" || x == "FALLBACK") && isMethodSignature y) ]
 
+extractTags :: [(String,String)] -> [String]
+extractTags asm = [ y | (x,y) <- asm, ((x == "JUMPDEST" || x == "FALLBACK")) ]
 
 
 
@@ -205,12 +223,31 @@ countPush :: String -> Int
 countPush y = (length y) `div` 2 - 1
 
 
-computeBytecode :: [(String,String)] -> [(String,String,String)]
-computeBytecode assembly = map (\(x,y) -> (x,y,hexFromInstr (x,y))) assembly
+precomputeBytecode :: [(String,String)] -> [(String,String,String)]
+precomputeBytecode asm = map (\(x,y) -> (x,y,hexFromInstr (x,y))) asm
+
+
+
+
+
+computeOffsets :: [(String,String,String)] -> [(String,String,String,String)]
+computeOffsets asm = let
+  l = scanl (+) 0 . map (\(_,_,xs) -> length xs) $ asm
+  -- in foldr (\(x,y,z) -> (x,y,z,show l)) asm ("","","","")
+  in map (\(x,y,z) -> (x,y,z,show l)) asm
+
+
+resolveJumps :: [(String,String,String)] -> [(String,String,String,String)]
+resolveJumps asm = computeOffsets asm
+
+
+
+computeBytecode :: [(String,String)] -> [(String,String,String,String)]
+computeBytecode asm = resolveJumps $ precomputeBytecode asm
 
 
 uniteBytecode :: [(String,String,String)] -> String
-uniteBytecode assembly = foldl (++) "" [ z | (_,_,z) <- assembly , True ]
+uniteBytecode asm = foldl (++) "" [ z | (_,_,z) <- asm , True ]
 
 
 
