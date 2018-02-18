@@ -10,10 +10,13 @@ main = (getArgs)
   >>= return . head
   >>= readFile
   >>= return . parseAsmFileContents
-  >>= return . unfoldPseudoasm
+  -- >>= return . unfoldPseudoasm
   -- >>= return . splitInitSection
   >>= return . computeBytecode
   -- >>= return . uniteBytecode
   -- >>= return . addLoader
   -- >>= print
+
   >>= mapM_ print
+
+  -- >>= mapM_ printASMLine

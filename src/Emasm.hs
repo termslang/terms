@@ -6,29 +6,24 @@ module Emasm
   , extractMethods
   , uniteBytecode
   , addLoader
+  -- , printASMLine
   ) where
 
 
 import Data.List
 import Data.Char
-import Numeric (showIntAtBase)
 import Data.Text.Encoding   (encodeUtf8)
 import Data.Text.Conversions
 import Crypto.Hash          (hash, Keccak_256, Digest)
-import Text.Printf
+
+import Common (showHex, hexFromInstr)
 
 
-showHex' :: (Integral a, Show a) => a -> String
-showHex' x = if (length s) `mod` 2 == 1 then '0':s else s
-  where s = (showIntAtBase 16 intToDigit) x ""
-
-keccakHash :: String -> String
-keccakHash x = show (hash (encodeUtf8 (convertText (x))) :: Digest Keccak_256)
-
+{-
 hexFromInstr :: (String,String) -> String
 hexFromInstr instr =
   case instr of
-    ("PUSH", y) -> showHex' (0x5f + countPush y) ++ drop 2 y
+    ("PUSH", y) -> showHex (0x5f + countPush y) ++ drop 2 y
 
     ("STOP"      ,_) -> "00"
     ("ADD"       ,_) -> "01"
@@ -149,26 +144,31 @@ hexFromInstr instr =
     ("SUICIDE"       ,_) -> "ff"
 
     (_,_) -> ""
+-}
+
+import System.Environment
+
+
+keccakHash :: String -> String
+keccakHash x = show (hash (encodeUtf8 (convertText (x))) :: Digest Keccak_256)
 
 
 
-data ASMLine = ASMLine
+
+data ASMLine = ASMLine  -- String String
   { instr    :: String
   , operand  :: String
   , bytecode :: String
-  } deriving (Show, Eq)
-printASMLine :: ASMLine -> String
-printASMLine r =
-  printf
-    "%s %s, bytecode: %s"
-    (instr r)
-    (operand r)
-    (bytecode r)
+  }
+  deriving (Eq)
+instance Show ASMLine where
+  show (ASMLine instr operand bytecode) = init (show instr) ++ " " ++ tail (show operand) ++ ",\t" ++ show bytecode
 
 
 
-parseAsmFileContents :: String -> [(String,String)]
-parseAsmFileContents  = map (\(x,y) -> (x, dropWhile isSpace y)) .
+parseAsmFileContents :: String -> [ASMLine]
+parseAsmFileContents =
+  map (\(x,y) -> ASMLine {instr = x, operand = dropWhile isSpace y, bytecode = ""}) .
   map (break isSpace) . filter (not . null) . map (dropWhileEnd isSpace) .
   map (dropWhile isSpace) . map (takeWhile (/=';')) . lines
 
@@ -219,13 +219,17 @@ unfoldPseudoasm pseudoasm = pseudoasm
 
 
 
-countPush :: String -> Int
-countPush y = (length y) `div` 2 - 1
 
 
-precomputeBytecode :: [(String,String)] -> [(String,String,String)]
-precomputeBytecode asm = map (\(x,y) -> (x,y,hexFromInstr (x,y))) asm
 
+
+precomputeBytecode :: [ASMLine] -> [ASMLine]
+precomputeBytecode asm = map (\x -> x {bytecode = hexFromInstr (instr x)}) asm
+
+
+computeBytecode :: [ASMLine] -> [ASMLine]
+computeBytecode asm = precomputeBytecode asm
+-- computeBytecode asm = resolveJumps $ precomputeBytecode asm
 
 
 
@@ -242,8 +246,6 @@ resolveJumps asm = computeOffsets asm
 
 
 
-computeBytecode :: [(String,String)] -> [(String,String,String,String)]
-computeBytecode asm = resolveJumps $ precomputeBytecode asm
 
 
 uniteBytecode :: [(String,String,String)] -> String
@@ -258,9 +260,9 @@ addLoader bytecode = let
   initial = "hdfhsbhb"
   codesize = length bytecode `div` 2
   codepush = if codesize > 0xff then "61" else "60"
-  a = initial ++ codepush ++ showHex' codesize ++ "80"
+  a = initial ++ codepush ++ showHex codesize ++ "80"
   codeoffset1 = length a `div` 2 + 8
   initpush = if codeoffset > 0xff then "61" else "60"
   codeoffset = if codeoffset1 > 0xff then codeoffset1 + 1 else codeoffset1
-  b = a ++ initpush ++ showHex' codeoffset ++ "6000396000f3" ++ bytecode
+  b = a ++ initpush ++ showHex codeoffset ++ "6000396000f3" ++ bytecode
   in b

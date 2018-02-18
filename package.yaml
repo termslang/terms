@@ -1,7 +1,7 @@
 name:                termslang
 version:             0.1.0.0
 github:              "termslang/terms-haskell"
-license:             GPLv2
+license:             GPL-2
 author:              "Michael Baynov"
 maintainer:          "m.baynov@gmail.com"
 copyright:           "2018 Michael Baynov"
