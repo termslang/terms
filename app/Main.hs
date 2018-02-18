@@ -6,11 +6,11 @@ import System.Environment
 import Emasm
 
 main :: IO ()
-main = (getArgs)
+main = getArgs
   >>= return . head
   >>= readFile
   >>= return . parseAsmFileContents
-  -- >>= return . unfoldPseudoasm
+  >>= return . unfoldPseudoasm
   -- >>= return . splitInitSection
   >>= return . computeBytecode
   -- >>= return . uniteBytecode

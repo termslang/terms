@@ -12,146 +12,7 @@ module Emasm
 
 import Data.List
 import Data.Char
-import Data.Text.Encoding   (encodeUtf8)
-import Data.Text.Conversions
-import Crypto.Hash          (hash, Keccak_256, Digest)
-
-import Common (showHex, hexFromInstr)
-
-
-{-
-hexFromInstr :: (String,String) -> String
-hexFromInstr instr =
-  case instr of
-    ("PUSH", y) -> showHex (0x5f + countPush y) ++ drop 2 y
-
-    ("STOP"      ,_) -> "00"
-    ("ADD"       ,_) -> "01"
-    ("MUL"       ,_) -> "02"
-    ("SUB"       ,_) -> "03"
-    ("DIV"       ,_) -> "04"
-    ("SDIV"      ,_) -> "05"
-    ("MOD"       ,_) -> "06"
-    ("SMOD"      ,_) -> "07"
-    ("ADDMOD"    ,_) -> "08"
-    ("MULMOD"    ,_) -> "09"
-    ("EXP"       ,_) -> "0a"
-    ("SIGNEXTEND",_) -> "0b"
-
-    ("LT"        ,_) -> "10"
-    ("GT"        ,_) -> "11"
-    ("SLT"       ,_) -> "12"
-    ("SGT"       ,_) -> "13"
-    ("EQ"        ,_) -> "14"
-    ("ISZERO"    ,_) -> "15"
-    ("AND"       ,_) -> "16"
-    ("OR"        ,_) -> "17"
-    ("XOR"       ,_) -> "18"
-    ("NOT"       ,_) -> "19"
-    ("BYTE"      ,_) -> "1a"
-
-    ("SHA3"      ,_) -> "20"
-
-    ("ADDRESS"       ,_) -> "30"
-    ("BALANCE"       ,_) -> "31"
-    ("ORIGIN"        ,_) -> "32"
-    ("CALLER"        ,_) -> "33"
-    ("CALLVALUE"     ,_) -> "34"
-    ("CALLDATALOAD"  ,_) -> "35"
-    ("CALLDATASIZE"  ,_) -> "36"
-    ("CALLDATACOPY"  ,_) -> "37"
-    ("CODESIZE"      ,_) -> "38"
-    ("CODECOPY"      ,_) -> "39"
-    ("GASPRICE"      ,_) -> "3a"
-    ("EXTCODESIZE"   ,_) -> "3b"
-    ("EXTCODECOPY"   ,_) -> "3c"
-    ("RETURNDATASIZE",_) -> "3d"
-    ("RETURNDATACOPY",_) -> "3e"
-
-    ("BLOCKHASH"  ,_) -> "40"
-    ("COINBASE"   ,_) -> "41"
-    ("TIMESTAMP"  ,_) -> "42"
-    ("NUMBER"     ,_) -> "43"
-    ("DIFFICULTY" ,_) -> "44"
-    ("GASLIMIT"   ,_) -> "45"
-
-    ("POP"        ,_) -> "50"
-    ("MLOAD"      ,_) -> "51"
-    ("MSTORE"     ,_) -> "52"
-    ("MSTORE8"    ,_) -> "53"
-    ("SLOAD"      ,_) -> "54"
-    ("SSTORE"     ,_) -> "55"
-    ("JUMP"       ,_) -> "56"
-    ("JUMPI"      ,_) -> "57"
-    ("PC"         ,_) -> "58"
-    ("MSIZE"      ,_) -> "59"
-    ("GAS"        ,_) -> "5a"
-    ("JUMPDEST"   ,_) -> "5b"
-
-    ("DUP1"       ,_) -> "80"
-    ("DUP2"       ,_) -> "81"
-    ("DUP3"       ,_) -> "82"
-    ("DUP4"       ,_) -> "83"
-    ("DUP5"       ,_) -> "84"
-    ("DUP6"       ,_) -> "85"
-    ("DUP7"       ,_) -> "86"
-    ("DUP8"       ,_) -> "87"
-    ("DUP9"       ,_) -> "88"
-    ("DUP10"      ,_) -> "89"
-    ("DUP11"      ,_) -> "8a"
-    ("DUP12"      ,_) -> "8b"
-    ("DUP13"      ,_) -> "8c"
-    ("DUP14"      ,_) -> "8d"
-    ("DUP15"      ,_) -> "8e"
-    ("DUP16"      ,_) -> "8f"
-
-    ("SWAP1"      ,_) -> "90"
-    ("SWAP2"      ,_) -> "91"
-    ("SWAP3"      ,_) -> "92"
-    ("SWAP4"      ,_) -> "93"
-    ("SWAP5"      ,_) -> "94"
-    ("SWAP6"      ,_) -> "95"
-    ("SWAP7"      ,_) -> "96"
-    ("SWAP8"      ,_) -> "97"
-    ("SWAP9"      ,_) -> "98"
-    ("SWAP10"     ,_) -> "99"
-    ("SWAP11"     ,_) -> "9a"
-    ("SWAP12"     ,_) -> "9b"
-    ("SWAP13"     ,_) -> "9c"
-    ("SWAP14"     ,_) -> "9d"
-    ("SWAP15"     ,_) -> "9e"
-    ("SWAP16"     ,_) -> "9f"
-
-    ("LOG0"       ,_) -> "a0"
-    ("LOG1"       ,_) -> "a1"
-    ("LOG2"       ,_) -> "a2"
-    ("LOG3"       ,_) -> "a3"
-    ("LOG4"       ,_) -> "a4"
--- opcodes е1, е2, е3 deprecated
-
-    ("CREATE"        ,_) -> "f0"
-    ("CALL"          ,_) -> "f1"
-    ("CALLCODE"      ,_) -> "f2"
-    ("RETURN"        ,_) -> "f3"
-    ("DELEGATECALL"  ,_) -> "f4"
-    ("CALLBLACKBOX"  ,_) -> "f5"
-
-    ("STATICCALL"    ,_) -> "fa"
-    ("REVERT"        ,_) -> "fd"
-    ("INVALID"       ,_) -> "fe"
-
-    ("SELFDESTRUCT"  ,_) -> "ff"
-    ("SUICIDE"       ,_) -> "ff"
-
-    (_,_) -> ""
--}
-
-import System.Environment
-
-
-keccakHash :: String -> String
-keccakHash x = show (hash (encodeUtf8 (convertText (x))) :: Digest Keccak_256)
-
+import Common (keccakHash, showHex, hexFromInstr)
 
 
 
@@ -159,16 +20,16 @@ data ASMLine = ASMLine  -- String String
   { instr    :: String
   , operand  :: String
   , bytecode :: String
+  , offset   :: Int
   }
   deriving (Eq)
 instance Show ASMLine where
-  show (ASMLine instr operand bytecode) = init (show instr) ++ " " ++ tail (show operand) ++ ",\t" ++ show bytecode
-
+  show (ASMLine instr operand bytecode offset) = "(" ++ init (show instr) ++ " " ++ tail (show operand) ++ ",          " ++ show bytecode ++ ", offset " ++ show offset ++ ")"
 
 
 parseAsmFileContents :: String -> [ASMLine]
 parseAsmFileContents =
-  map (\(x,y) -> ASMLine {instr = x, operand = dropWhile isSpace y, bytecode = ""}) .
+  map (\(x,y) -> ASMLine {instr = x, operand = dropWhile isSpace y, bytecode = "", offset = 0}) .
   map (break isSpace) . filter (not . null) . map (dropWhileEnd isSpace) .
   map (dropWhile isSpace) . map (takeWhile (/=';')) . lines
 
@@ -208,48 +69,80 @@ extractTags asm = [ y | (x,y) <- asm, ((x == "JUMPDEST" || x == "FALLBACK")) ]
 
 
 
-unfoldPseudoasm :: [(String,String)] -> [(String,String)]
--- unfoldPseudoasm :: [(String,String)] -> [(String,String)]
+unfoldPseudoasm :: [ASMLine] -> [ASMLine]
 unfoldPseudoasm pseudoasm = pseudoasm
--- unfoldPseudoasm pseudoasm = map (\(x,y) -> (x,keccakHash y)) pseudoasm
--- unfoldPseudoasm pseudoasm = map (\(x,y) -> (x,y ++ show (isMethodSignature y))) pseudoasm
--- unfoldPseudoasm pseudoasm = map unfoldPush pseudoasm
-
-
-
-
 
 
 
 
 
 precomputeBytecode :: [ASMLine] -> [ASMLine]
-precomputeBytecode asm = map (\x -> x {bytecode = hexFromInstr (instr x)}) asm
+precomputeBytecode asm = map (\x -> x {bytecode = hexFromInstr (instr x)(operand x)}) asm
 
 
 computeBytecode :: [ASMLine] -> [ASMLine]
-computeBytecode asm = precomputeBytecode asm
--- computeBytecode asm = resolveJumps $ precomputeBytecode asm
+-- computeBytecode asm = precomputeBytecode asm
+computeBytecode asm = resolveJumps $ precomputeBytecode asm
 
 
 
-
-computeOffsets :: [(String,String,String)] -> [(String,String,String,String)]
-computeOffsets asm = let
-  l = scanl (+) 0 . map (\(_,_,xs) -> length xs) $ asm
-  -- in foldr (\(x,y,z) -> (x,y,z,show l)) asm ("","","","")
-  in map (\(x,y,z) -> (x,y,z,show l)) asm
+uniteBytecode :: [ASMLine] -> String
+uniteBytecode asm = foldl (++) "" [ bytecode x | x <- asm ]
+-- uniteBytecode :: [(String,String,String)] -> String
+-- uniteBytecode asm = foldl (++) "" [ z | (_,_,z) <- asm , True ]
 
 
-resolveJumps :: [(String,String,String)] -> [(String,String,String,String)]
+-- totalLength :: [ASMLine] -> Int
+-- totalLength a = foldl (+) 0 [ length (bytecode x) | x <- a ]
+
+computeOffsets :: [ASMLine] -> [ASMLine]
+computeOffsets [] = []
+computeOffsets (a:as) = let
+  t = length (uniteBytecode (a:as))
+  v = foldl (+) 0 [ length (bytecode x) | x <- as ]
+
+  in a {offset = v}: computeOffsets as
+  -- where
+  -- oo = foldl (+) 0 (offset (a:as))
+  -- oo = scanl (+) 0 . map (\x -> length (bytecode x)) $ (a:as)
+
+{-
+computeOffsets :: [ASMLine] -> [ASMLine]
+computeOffsets :: [a] -> [b] -> [(a,b)]
+computeOffsets []     _bs    = []
+computeOffsets _as    []     = []
+computeOffsets (a:as) (b:bs) = (a,b) : computeOffsets as bs
+  where
+  oo = scanl (+) 0 . map (\x -> length (bytecode x)) $ asm
+-}
+
+
+--
+-- computeOffsets :: [ASMLine] -> [ASMLine]
+-- -- computeOffsets asm = map (\x -> x {offset = oo}) asm
+-- computeOffsets asm =
+--   -- [ x {offset = y} | x <- asm , y <- oo ]
+--   map (\x -> x {offset = 2}) asm
+--
+--   -- map (\x -> x {offset = oo}) asm
+--   where
+--   oo = scanl (+) 0 . map (\x -> length (bytecode x)) $ asm
+-- --  foldl (+) (length (bytecode x) `div` 2)--  (\x -> x {offset = length (bytecode x) `div` 2}) asm
+-- -- computeOffsets asm = map (\x -> x {offset = length (bytecode x) `div` 2}) asm
+
+  -- l = map (\x -> length (bytecode x)) $ asm
+  -- l = head . scanl (+) 0 . map (\x -> length (bytecode x)) $ asm
+  -- -- in foldr (\(x,y,z) -> (x,y,z,show l)) asm ("","","","")
+  -- in map (\(x,y,z) -> (x,y,z,show l)) asm
+
+
+resolveJumps :: [ASMLine] -> [ASMLine]
 resolveJumps asm = computeOffsets asm
 
 
 
 
 
-uniteBytecode :: [(String,String,String)] -> String
-uniteBytecode asm = foldl (++) "" [ z | (_,_,z) <- asm , True ]
 
 
 

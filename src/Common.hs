@@ -1,23 +1,32 @@
 module Common
-  ( showHex
+  ( keccakHash
+  , showHex
   , hexFromInstr
   ) where
 
+
 import Data.Char
 import Numeric (showIntAtBase)
+
+import Data.Text.Encoding   (encodeUtf8)
+import Data.Text.Conversions
+import Crypto.Hash          (hash, Keccak_256, Digest)
+keccakHash :: String -> String
+keccakHash x = show (hash (encodeUtf8 (convertText (x))) :: Digest Keccak_256)
+
 
 showHex :: (Integral a, Show a) => a -> String
 showHex x = if odd (length s) then '0':s else s
   where s = (showIntAtBase 16 intToDigit) x ""
 
 
-hexFromInstr :: String -> String
-hexFromInstr instr =
+hexFromInstr :: String -> String -> String
+hexFromInstr instr operand =
   case instr of
-    "PUSH" -> "showHex (0x5f + countPush y) ++ drop 2 y"
-    _ -> zz !! 0
+    "PUSH" -> showHex (0x5f + (length operand) `div` 2 - 1) ++ drop 2 operand
+    _ -> yy !! 0
   where
-    yy = [ y | (x,y) <- l , x == instr ]
+    yy = [ y | (x,y) <- l , x == instr ] ++ [""]
     l = [
       ("STOP", "00"),
       ("ADD", "01"),
@@ -121,7 +130,7 @@ hexFromInstr instr =
       ("LOG2", "a2"),
       ("LOG3", "a3"),
       ("LOG4", "a4"),
-
+-- opcodes е1, е2, е3 deprecated
       ("CREATE", "f0"),
       ("CALL", "f1"),
       ("CALLCODE", "f2"),
@@ -136,8 +145,3 @@ hexFromInstr instr =
       ("SELFDESTRUCT", "ff"),
       ("SUICIDE", "ff")
       ]
---    countPush :: String -> Int
-    countPush y = (length y) `div` 2 - 1
-
-    zz = yy ++ [""]
-        -- ("PUSH", y) -> showHex (0x5f + countPush y) ++ drop 2 y
