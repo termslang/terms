@@ -4,7 +4,6 @@ module Emasm
   , splitInitSection
   , computeBytecode
   , extractMethods
-  , uniteBytecode
   , addLoader
   -- , printASMLine
   ) where
@@ -15,33 +14,86 @@ import Data.Char
 import Common (keccakHash, showHex, hexFromInstr)
 
 
-
-data ASMLine = ASMLine  -- String String
+data ASMLine = ASMLine
   { instr    :: String
   , operand  :: String
   , bytecode :: String
-  , offset   :: Int
+  , offset   :: String
   }
   deriving (Eq)
 instance Show ASMLine where
-  show (ASMLine instr operand bytecode offset) = "(" ++ init (show instr) ++ " " ++ tail (show operand) ++ ",          " ++ show bytecode ++ ", offset " ++ show offset ++ ")"
+  show (ASMLine instr operand bytecode offset) = "(" ++ init (show instr) ++ " " ++ tail (show operand) ++ ",          " ++ show bytecode ++ if instr == "JUMPDEST" then ", offset " ++ operand ++ ":" ++ show offset else "" ++ ")"
 
 
 parseAsmFileContents :: String -> [ASMLine]
 parseAsmFileContents =
-  map (\(x,y) -> ASMLine {instr = x, operand = dropWhile isSpace y, bytecode = "", offset = 0}) .
+  map (\(x,y) -> ASMLine {instr = x, operand = dropWhile isSpace y, bytecode = "", offset = ""}) .
   map (break isSpace) . filter (not . null) . map (dropWhileEnd isSpace) .
   map (dropWhile isSpace) . map (takeWhile (/=';')) . lines
 
 
+offsets :: [ASMLine] -> [ASMLine]
+backOffsets [] = []
+backOffsets (a:as) = a {offset = showHex (length (concatMap bytecode (a:as)) `div` 2)}: backOffsets as
+offsets = reverse . backOffsets . reverse
 
 
--- unfoldPush :: (String,String) -> (String,String)
--- unfoldPush (x,y)
---   | (x == "PUSH") = ("PUSH" ++ (show n), y)
---   | otherwise     = (x,y)
---   where
---     n = (length y) `div` 2 - 1
+
+
+
+-- extractTags :: [ASMLine] -> [(String,String)]
+-- extractTags asm = [ y | (x,y) <- asm, ((x == "JUMPDEST")) ]
+--
+
+precomputeBytecode :: [ASMLine] -> [ASMLine]
+precomputeBytecode asm = map (\x -> x {bytecode = hexFromInstr (instr x)(operand x)}) asm
+
+
+{-
+findLabel :: [(String,String)] -> ASMLine -> String
+findLabel labels x = let
+  a = lookup (operand x) labels
+  in case a of
+    Just a -> a
+    otherwise -> "??"
+
+
+resolveJumps :: [ASMLine] -> [ASMLine]
+resolveJumps asm = let
+  labels = [ (operand x, offset x) | x <- asm, instr x == "JUMPDEST" ]
+  bc x = case instr x of
+    "JUMP" -> "56" ++ findLabel labels x
+    "JUMPI" -> "57" ++ findLabel labels x
+    _ -> bytecode x
+  in map (\x -> x { bytecode = bc x }) asm
+-}
+
+
+findLabel :: [(String,String)] -> String -> String
+findLabel labels x = let
+  a = lookup (x) labels
+  in case a of
+    Just a -> a
+    otherwise -> "??"
+
+
+resolveJumps :: [ASMLine] -> [ASMLine]
+resolveJumps asm = let
+  labels = [ (operand x, offset x) | x <- asm, instr x == "JUMPDEST" ]
+  bc x = case instr x of
+    "JUMP" -> "56" ++ findLabel labels (operand x)
+    "JUMPI" -> "57" ++ findLabel labels (operand x)
+    _ -> bytecode x
+--TODO: change offsets according to changes
+  in map (\x -> x { bytecode = bc x }) asm
+
+
+
+computeBytecode :: [ASMLine] -> [ASMLine]
+computeBytecode = resolveJumps . offsets . precomputeBytecode
+
+
+
 
 
 splitInitSection :: [(String,String)] -> ([(String,String)], [(String,String)])
@@ -58,9 +110,6 @@ isMethodSignature x
 extractMethods :: [(String,String)] -> [String]
 extractMethods asm = [ y | (x,y) <- asm, ((x == "JUMPDEST" || x == "FALLBACK") && isMethodSignature y) ]
 
-extractTags :: [(String,String)] -> [String]
-extractTags asm = [ y | (x,y) <- asm, ((x == "JUMPDEST" || x == "FALLBACK")) ]
-
 
 
 -- unfoldFallback :: (String,String) -> (String,String)
@@ -76,68 +125,8 @@ unfoldPseudoasm pseudoasm = pseudoasm
 
 
 
-precomputeBytecode :: [ASMLine] -> [ASMLine]
-precomputeBytecode asm = map (\x -> x {bytecode = hexFromInstr (instr x)(operand x)}) asm
 
 
-computeBytecode :: [ASMLine] -> [ASMLine]
--- computeBytecode asm = precomputeBytecode asm
-computeBytecode asm = resolveJumps $ precomputeBytecode asm
-
-
-
-uniteBytecode :: [ASMLine] -> String
-uniteBytecode asm = foldl (++) "" [ bytecode x | x <- asm ]
--- uniteBytecode :: [(String,String,String)] -> String
--- uniteBytecode asm = foldl (++) "" [ z | (_,_,z) <- asm , True ]
-
-
--- totalLength :: [ASMLine] -> Int
--- totalLength a = foldl (+) 0 [ length (bytecode x) | x <- a ]
-
-computeOffsets :: [ASMLine] -> [ASMLine]
-computeOffsets [] = []
-computeOffsets (a:as) = let
-  t = length (uniteBytecode (a:as))
-  v = foldl (+) 0 [ length (bytecode x) | x <- as ]
-
-  in a {offset = v}: computeOffsets as
-  -- where
-  -- oo = foldl (+) 0 (offset (a:as))
-  -- oo = scanl (+) 0 . map (\x -> length (bytecode x)) $ (a:as)
-
-{-
-computeOffsets :: [ASMLine] -> [ASMLine]
-computeOffsets :: [a] -> [b] -> [(a,b)]
-computeOffsets []     _bs    = []
-computeOffsets _as    []     = []
-computeOffsets (a:as) (b:bs) = (a,b) : computeOffsets as bs
-  where
-  oo = scanl (+) 0 . map (\x -> length (bytecode x)) $ asm
--}
-
-
---
--- computeOffsets :: [ASMLine] -> [ASMLine]
--- -- computeOffsets asm = map (\x -> x {offset = oo}) asm
--- computeOffsets asm =
---   -- [ x {offset = y} | x <- asm , y <- oo ]
---   map (\x -> x {offset = 2}) asm
---
---   -- map (\x -> x {offset = oo}) asm
---   where
---   oo = scanl (+) 0 . map (\x -> length (bytecode x)) $ asm
--- --  foldl (+) (length (bytecode x) `div` 2)--  (\x -> x {offset = length (bytecode x) `div` 2}) asm
--- -- computeOffsets asm = map (\x -> x {offset = length (bytecode x) `div` 2}) asm
-
-  -- l = map (\x -> length (bytecode x)) $ asm
-  -- l = head . scanl (+) 0 . map (\x -> length (bytecode x)) $ asm
-  -- -- in foldr (\(x,y,z) -> (x,y,z,show l)) asm ("","","","")
-  -- in map (\(x,y,z) -> (x,y,z,show l)) asm
-
-
-resolveJumps :: [ASMLine] -> [ASMLine]
-resolveJumps asm = computeOffsets asm
 
 
 
