@@ -4,10 +4,12 @@ module Emasm
   , computeBytecode
   , finalizeBytecode
   , unfoldPseudoasm
+  , swapYESNO
   ) where
 import Data.List
 import Data.Char
-import Common (keccakHash, showHex, prependPush, hexFromInstr)
+import Common (keccakHash, rmdups, showHex, prependPush, hexFromInstr)
+
 
 
 data ASMLine = ASMLine
@@ -26,12 +28,12 @@ newASMLine :: String -> ASMLine
 newASMLine = (\(x,y) -> ASMLine {instr = x, operand = dropWhile isSpace y, bytecode = "", offset = ""}) . break isSpace
 
 parseAsmFileContents :: String -> [ASMLine]
-parseAsmFileContents =
-  map newASMLine . filter (not . null) . map (dropWhileEnd isSpace) .
+parseAsmFileContents = map newASMLine . filter (not . null) . map (dropWhileEnd isSpace) .
   map (dropWhile isSpace) . map (takeWhile (/=';')) . lines
 
 
 --TODO test PUSH if hex or tag
+--TODO test not unique CONDITIONYES CONDITIONNOT CONDITIONEND operand
 testErrors :: [ASMLine] -> [String]
 testErrors (x:xs) = let
   p1 = takeWhile (\x -> instr x /= "INIT") $ (x:xs)
@@ -48,7 +50,7 @@ getTagPush tags x = let
   a = lookup (x) tags
   in case a of
     Just a -> prependPush a
-    otherwise -> ""
+    _ -> ""
 
 resolveJumps :: [ASMLine] -> [ASMLine]
 resolveJumps asm = let
@@ -122,31 +124,71 @@ unFALLBACK (x:xs) = let
       , newASMLine "CALLDATALOAD"
       , newASMLine "DIV"
       ]
-  -- dup = [ ASMLine {instr = "DUP1", operand = "", bytecode = "", offset = ""}]
-  c = concat (map dispatcherLine (init (methods (x:xs))))
-  d = drop 1 (dispatcherLine (last (methods (x:xs))))
-  e = dropWhile (\x -> instr x /= "FALLBACK") $ (x:xs)
-  f = (head e) {instr = "JUMPDEST"} : tail e
+  mm = methods (x:xs)
+  c = if length mm > 1 then concat . map dispatcherLine . init $ mm else []
+  d = if length mm > 0 then drop 1 . dispatcherLine . last $ mm else []
+  e = dropWhile (\x -> instr x /= "FALLBACK") (x:xs)
+  f = if length e > 0 then (head e) {instr = "JUMPDEST"} : tail e else []
   in a ++ b ++ c ++ d ++ f
 
 
 -- TODO remove last JUMPDEST if next is JUMPDEST, replace all last JUMPDEST operands with the next
 -- TODO REFJUMPI ??
-unREFJUMP :: Int -> [ASMLine] -> [ASMLine]
-unREFJUMP n [] = []
-unREFJUMP n (x:xs) = case instr x of
-  "BACKJUMP" -> newASMLine "PUSH 0x00"
-              : newASMLine "MLOAD"
-              : x { instr = "JUMP", operand = "" }
-              : unREFJUMP (n+1) xs
-  "REFJUMP"  -> newASMLine ("PUSH REFJUMP_POINT_" ++ show n)  -- "PUSH 0x00000001"
-              : newASMLine "PUSH 0x00"
-              : newASMLine "MSTORE"
-              : x { instr = "JUMP" }
-              : newASMLine ("JUMPDEST REFJUMP_POINT_" ++ show n)
-              : unREFJUMP (n+1) xs
-  _ -> x: unREFJUMP (n+1) xs
+
+unREFJUMP :: [ASMLine] -> [ASMLine]
+unREFJUMP = unREFJUMP' 0 where
+  unREFJUMP' :: Int -> [ASMLine] -> [ASMLine]
+  unREFJUMP' n [] = []
+  unREFJUMP' n (x:xs) = case instr x of
+    "BACKJUMP" -> newASMLine "PUSH 0x00"
+                : newASMLine "MLOAD"
+                : x { instr = "JUMP", operand = "" }
+                : unREFJUMP' (n+1) xs
+    "REFJUMP"  -> newASMLine ("PUSH REFJUMP_POINT_" ++ show n)
+                : newASMLine "PUSH 0x00"
+                : newASMLine "MSTORE"
+                : x { instr = "JUMP" }
+                : newASMLine ("JUMPDEST REFJUMP_POINT_" ++ show n)
+                : unREFJUMP' (n+1) xs
+    _ -> x : unREFJUMP' (n+1) xs
+
+
+
+
+swapYESNO :: [ASMLine] -> [ASMLine]
+swapYESNO asm = let
+  a = [ x | x <- asm, elem (instr x) ["CONDITIONNOT","CONDITIONYES","CONDITIONEND"] ]
+  tags = rmdups [ operand x | x <- a ]
+  isYESNOpattern asm
+    | [ instr x | x <- asm ] == ["CONDITIONYES","CONDITIONNOT","CONDITIONEND"] = True
+    | otherwise = False
+  patt t = [ x | x <- a, operand x == t ]
+  e = filter isYESNOpattern (map patt tags)
+  yesnotags = rmdups [operand . head $ x | x <- e]
+  cond i tag x = instr x /= i || operand x /= tag
+  swapYESNO' tag asm' = f1 ++ f3 ++ f2 ++ f4 where
+    f1 = takeWhile (cond "CONDITIONYES" tag) asm'
+    f2 = init . dropWhileEnd (cond "CONDITIONNOT" tag) . dropWhile (cond "CONDITIONYES" tag) $ asm'
+    f3 = init . dropWhileEnd (cond "CONDITIONEND" tag) . dropWhile (cond "CONDITIONNOT" tag) $ asm'
+    f4 = dropWhile (cond "CONDITIONEND" tag) asm'
+  in  foldr swapYESNO' asm yesnotags
+
+
+
+--TODO
+unCONDITION :: [ASMLine] -> [ASMLine]
+-- unCONDITION asm = asm
+conditions asm = [ x | x <- asm, elem (instr x) ["CONDITIONNOT","CONDITIONYES","CONDITIONEND"] ]
+patternNOTEND = []
+patternNOTYESEND = []
+patternYESEND = []
+unCONDITION [] = []
+unCONDITION (x:xs) = (x:xs)
+  -- | instr x == "CONDITIONNOT"    = x { instr = "JUMP", operand = "" } : unCONDITION xs
+  -- | instr x == "CONDITIONYES"    = x { instr = "JUMP", operand = "" } : unCONDITION xs
+  -- | instr x == "CONDITIONEND"    = x { instr = "JUMP", operand = "" } : unCONDITION xs
+  -- | otherwise                    = x : unCONDITION xs
 
 
 unfoldPseudoasm :: [ASMLine] -> [ASMLine]
-unfoldPseudoasm asm = unFALLBACK . unREFJUMP 0 $ asm
+unfoldPseudoasm = unFALLBACK . unREFJUMP . unCONDITION

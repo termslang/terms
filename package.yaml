@@ -1,5 +1,5 @@
 name:                termslang
-version:             0.1.0.0
+version:             0.0.1
 github:              "termslang/terms-haskell"
 license:             GPL-2
 author:              "Michael Baynov"
@@ -8,7 +8,6 @@ copyright:           "2018 Michael Baynov"
 
 extra-source-files:
 - README.md
-- ChangeLog.md
 
 # Metadata used when publishing your package
 # synopsis:            Short description of your package
@@ -23,7 +22,12 @@ dependencies:
 - base >= 4.7 && < 5
 - text
 - text-conversions
-- cryptonite >= 0.24 && < 1
+- cryptonite >= 0.23 && < 1
+- containers
+
+- web3 >= 0.6.0
+- aeson >= 1.1.2.0
+- template-haskell >= 2.11.1.0
 
 library:
   source-dirs: src

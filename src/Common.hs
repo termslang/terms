@@ -1,5 +1,6 @@
 module Common
   ( keccakHash
+  , rmdups
   , showHex
   , prependPush
   , hexFromInstr
@@ -8,12 +9,22 @@ module Common
 
 import Data.Char
 import Numeric (showIntAtBase)
-
+import qualified Data.Set as Set
 import Data.Text.Encoding   (encodeUtf8)
 import Data.Text.Conversions
 import Crypto.Hash          (hash, Keccak_256, Digest)
+
+
 keccakHash :: String -> String
 keccakHash x = show (hash (encodeUtf8 (convertText (x))) :: Digest Keccak_256)
+
+
+rmdups :: Ord a => [a] -> [a]
+rmdups = rmdups' Set.empty where
+  rmdups' _ [] = []
+  rmdups' a (b : c) = if Set.member b a
+    then rmdups' a c
+    else b : rmdups' (Set.insert b a) c
 
 
 showHex :: (Integral a, Show a) => a -> String
